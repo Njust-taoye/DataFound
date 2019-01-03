@@ -24,8 +24,6 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import datetime
 
-print "!!!!!!!!!!"
-
 
 def _remove_noise(document):
     noise_pattern = re.compile("|".join(["http\S+", "\@\w+", "\#\w+"]))
@@ -66,17 +64,13 @@ def cal_score(real_Y, pred_Y):
     res = sum(count * dev)/ float(sum(count))
     return res
 
-
-
-
-
 if __name__ == '__main__':
     filename = 'weibo_train_data.txt'
     df = pd.read_csv(filename, sep='\t', header=None, names=['uid', 'mid', 'time', 'fc', 'cc', 'lc', 'content'])
     df.dropna(inplace=True)
     train_df = df[(df['time'] > "2015-03-10 00:00:00") & (df['time'] < "2015-07-01 00:00:00")]
     eval_df = df[(df['time'] >= "2015-07-01 00:00:00")]
-    print "splited!!!!"
+    print "train and eval has splited!!!!"
 
     train_df['weekday'] = train_df['time'].apply(lambda x: get_weekday(x))
     train_dayhot = onehot(list(train_df['weekday']), 7)
@@ -93,7 +87,7 @@ if __name__ == '__main__':
     eval_df.reset_index(drop=True, inplace=True)
     eval_df = pd.concat([eval_df, eval_dayhot], axis=1)
     eval_df.drop(['weekday'], axis=1, inplace=True)
-    print "onehoted!!!" 
+    print "weekday onehoted!!!" 
 
     data_list = [] 
     def func(i):
@@ -133,9 +127,10 @@ if __name__ == '__main__':
     train_nGram.reset_index(drop=True, inplace=True)
     train_df.reset_index(drop=True, inplace=True)
     train_df = pd.concat([train_df, train_nGram], axis=1)
-    print "NGram!!!!"
+    print "Get Train NGram feature!!!!"
     train_Y = train_df[['fc', 'cc', 'lc']]
     train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
+    print "model established!!!!!"
     rf = RandomForestRegressor(oob_score=False, random_state=10)
     rf.fit(train_X, train_Y)
     print "model fited!!!!!"
@@ -175,6 +170,7 @@ if __name__ == '__main__':
     eval_nGram = pd.DataFrame(eval_nGram, columns=range(2000))
     eval_nGram.reset_index(drop=True, inplace=True)
     eval_df.reset_index(drop=True, inplace=True)
+    print "Get eval NGram feature!!!!!"
     eval_df = pd.concat([eval_df, eval_nGram], axis=1) 
     eval_Y = eval_df[['fc', 'cc', 'lc']]
     eval_X = eval_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
