@@ -24,6 +24,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import datetime
 
+print "!!!!!!!!!!"
 
 
 def _remove_noise(document):
