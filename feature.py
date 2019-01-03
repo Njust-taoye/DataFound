@@ -23,6 +23,7 @@ import re
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import datetime
+import argparse
 
 
 def _remove_noise(document):
@@ -65,29 +66,39 @@ def cal_score(real_Y, pred_Y):
     return res
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--addWeekday", help="add weekday feature if True", default=True)
+    parser.add_argument("--NGram_num", help="NGram feature num", type=int)
+    args = parser.parse_args()
+
     filename = 'weibo_train_data.txt'
     df = pd.read_csv(filename, sep='\t', header=None, names=['uid', 'mid', 'time', 'fc', 'cc', 'lc', 'content'])
     df.dropna(inplace=True)
-    train_df = df[(df['time'] > "2015-03-10 00:00:00") & (df['time'] < "2015-07-01 00:00:00")]
-    eval_df = df[(df['time'] >= "2015-07-01 00:00:00")]
+    #train_df = df[(df['time'] > "2015-03-10 00:00:00") & (df['time'] < "2015-07-01 00:00:00")]
+    #eval_df = df[(df['time'] >= "2015-07-01 00:00:00")]
+    train_df = df[(df['time'] > "2015-06-25 00:00:00") & (df['time'] < "2015-07-01 00:00:00")]
+    eval_df = df[(df['time'] >= "2015-07-29 00:00:00")]
+
     print "train and eval has splited!!!!"
 
-    train_df['weekday'] = train_df['time'].apply(lambda x: get_weekday(x))
-    train_dayhot = onehot(list(train_df['weekday']), 7)
-    train_dayhot = pd.DataFrame(train_dayhot, columns=range(7))
-    train_df.reset_index(drop=True, inplace=True)
-    train_dayhot.reset_index(drop=True, inplace=True)
-    train_df = pd.concat([train_df, train_dayhot], axis=1)
-    train_df.drop(['weekday'], axis=1, inplace=True)
+    weekday_fea = args.addWeekday
+    if weekday_fea:
+        train_df['weekday'] = train_df['time'].apply(lambda x: get_weekday(x))
+        train_dayhot = onehot(list(train_df['weekday']), 7)
+        train_dayhot = pd.DataFrame(train_dayhot, columns=range(7))
+        train_df.reset_index(drop=True, inplace=True)
+        train_dayhot.reset_index(drop=True, inplace=True)
+        train_df = pd.concat([train_df, train_dayhot], axis=1)
+        train_df.drop(['weekday'], axis=1, inplace=True)
 
-    eval_df['weekday'] = eval_df['time'].apply(lambda x: get_weekday(x))
-    eval_dayhot = onehot(list(eval_df['weekday']), 7)
-    eval_dayhot = pd.DataFrame(eval_dayhot, columns=range(7))
-    eval_dayhot.reset_index(drop=True, inplace=True)
-    eval_df.reset_index(drop=True, inplace=True)
-    eval_df = pd.concat([eval_df, eval_dayhot], axis=1)
-    eval_df.drop(['weekday'], axis=1, inplace=True)
-    print "weekday onehoted!!!" 
+        eval_df['weekday'] = eval_df['time'].apply(lambda x: get_weekday(x))
+        eval_dayhot = onehot(list(eval_df['weekday']), 7)
+        eval_dayhot = pd.DataFrame(eval_dayhot, columns=range(7))
+        eval_dayhot.reset_index(drop=True, inplace=True)
+        eval_df.reset_index(drop=True, inplace=True)
+        eval_df = pd.concat([eval_df, eval_dayhot], axis=1)
+        eval_df.drop(['weekday'], axis=1, inplace=True)
+        print "weekday onehoted!!!" 
 
     data_list = [] 
     def func(i):
@@ -121,9 +132,10 @@ if __name__ == '__main__':
         rp.close()
 
     
-    vectorizer = CountVectorizer(min_df=1, max_features=2000, ngram_range=(1,2), analyzer = 'word', stop_words = get_stop_words(), preprocessor=_remove_noise)
+    NGram_fea_num = args.NGram_num
+    vectorizer = CountVectorizer(min_df=1, max_features=NGram_fea_num, ngram_range=(1,2), analyzer = 'word', stop_words = get_stop_words(), preprocessor=_remove_noise)
     train_nGram = vectorizer.fit_transform(data_list).toarray()
-    train_nGram = pd.DataFrame(train_nGram, columns=range(2000))
+    train_nGram = pd.DataFrame(train_nGram, columns=range(NGram_fea_num))
     train_nGram.reset_index(drop=True, inplace=True)
     train_df.reset_index(drop=True, inplace=True)
     train_df = pd.concat([train_df, train_nGram], axis=1)
@@ -167,7 +179,7 @@ if __name__ == '__main__':
         erp.close()
 
     eval_nGram = vectorizer.transform(eval_data_list).toarray()
-    eval_nGram = pd.DataFrame(eval_nGram, columns=range(2000))
+    eval_nGram = pd.DataFrame(eval_nGram, columns=range(NGram_fea_num))
     eval_nGram.reset_index(drop=True, inplace=True)
     eval_df.reset_index(drop=True, inplace=True)
     print "Get eval NGram feature!!!!!"
