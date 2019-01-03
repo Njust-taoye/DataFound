@@ -77,7 +77,8 @@ if __name__ == '__main__':
     parser.add_argument("--addWeekday", help="add weekday feature if True", type=str2bool, nargs='?', const=True, default=True)
     parser.add_argument("--NGram_num", help="NGram feature num", type=int)
     args = parser.parse_args()
-
+    print "是否增加weekday特征", args.addWeekday
+    print "文本特征维度", args.NGram_num
     filename = 'weibo_train_data.txt'
     df = pd.read_csv(filename, sep='\t', header=None, names=['uid', 'mid', 'time', 'fc', 'cc', 'lc', 'content'])
     df.dropna(inplace=True)
