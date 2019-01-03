@@ -63,9 +63,18 @@ def cal_score(real_Y, pred_Y):
     res = sum(count * dev)/ float(sum(count))
     return res
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Unsupported value encountered.')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--addWeekday", help="add weekday feature if True", default=True)
+    parser.add_argument("--addWeekday", help="add weekday feature if True", type=str2bool, nargs='?', const=True, default=True)
     parser.add_argument("--NGram_num", help="NGram feature num", type=int)
     args = parser.parse_args()
 
@@ -84,7 +93,7 @@ if __name__ == '__main__':
         train_df['weekday'] = train_df['time'].apply(lambda x: get_weekday(x))
         train_dayhot = onehot(list(train_df['weekday']), 7)
         train_dayhot = pd.DataFrame(train_dayhot, columns=range(7))
-        train_df.reset_index(drop=True, inplace=True)
+        train_df.reset_index(drop=True, inplace=True)#两表合并时，两表最好都做如此操作
         train_dayhot.reset_index(drop=True, inplace=True)
         train_df = pd.concat([train_df, train_dayhot], axis=1)
         train_df.drop(['weekday'], axis=1, inplace=True)
@@ -141,7 +150,8 @@ if __name__ == '__main__':
     train_Y = train_df[['fc', 'cc', 'lc']]
     train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
     print "model established!!!!!"
-    rf = RandomForestRegressor(oob_score=False, random_state=10)
+    #rf = RandomForestRegressor(oob_score=False, random_state=10)
+    rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, min_samples_split=4, min_samples_leaf=2)
     rf.fit(train_X, train_Y)
     print "model fited!!!!!"
      
