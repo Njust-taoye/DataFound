@@ -1,9 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 ## @Author: taoye01
-## @Mail: taoye01@baidu.com
-## @File: get_nGram.py
-## @Copyright (c) 2012-2018 Baidu.com, Inc. All Rights Reserved
+## @File: feature.py
 ## @Created Time: Thu 27 Dec 2018 01:33:40 PM CST
 ## @Description:
 import pdb
