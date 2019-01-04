@@ -184,7 +184,7 @@ if __name__ == '__main__':
         #rf = RandomForestRegressor(oob_score=False, random_state=10)
         rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, \
                                     min_samples_split=4, min_samples_leaf=2)
-        rf.fit(train_X, train_Y)
+        print rf.fit(train_X, train_Y)
     if tune_mode:
         print "tune model start !!!!!"
         tune_model(train_X, train_Y)
