@@ -52,7 +52,6 @@ def cal_score(real_Y, pred_Y):
     real_fc = real_Y[:, 0]
     real_cc = real_Y[:, 1]
     real_lc = real_Y[:, 2]
-
     pred_fc = pred_Y[:, 0]
     pred_cc = pred_Y[:, 1]
     pred_lc = pred_Y[:, 2]
@@ -66,14 +65,12 @@ def cal_score(real_Y, pred_Y):
         else:
             return 0
     dev = np.array([func(x) for x in dev])
-
     count = real_fc + real_cc + real_lc + 1
     def func2(x):
         if x > 100:
             return 100
         else:
             return x
-
     count = np.array([func2(x) for x in count])
     res = sum(count * dev)/ float(sum(count))
     return res
@@ -88,19 +85,19 @@ def str2bool(v):
 
 def tune_model(train_X, train_Y):
     print ('获取内存占用率： '+(str)(psutil.virtual_memory().percent)+'%')
-    #tune_params = [{'n_estimators': range(100, 500,100), 'max_features': ['auto', 'sqrt', 'log2'], 'max_depth': range(50, 500, 50), \
-    #        'min_samples_split': [2, 4, 6, 10, 20], 'min_samples_leaf': [1, 2, 3, 5, 10]}] 
+    #tune_params = {'n_estimators': range(100, 500,100), 'max_features': ['auto', 'sqrt', 'log2'], 'max_depth': range(50, 500, 50), \
+    #        'min_samples_split': [2, 4, 6, 10, 20], 'min_samples_leaf': [1, 2, 3, 5, 10]} 
     
-    tune_params = [{'n_estimators': [100, 500], 'max_features': ['sqrt', 'log2'], 'max_depth': [100, 200]}]
+    tune_params = {'n_estimators': [100, 500], 'max_features': ['sqrt', 'log2'], 'max_depth': [100, 200]}
     score = make_scorer(cal_score, greater_is_better=False)
-
     gsearch = GridSearchCV(estimator = RandomForestRegressor(oob_score=False, random_state=10), param_grid = tune_params, scoring=score, cv=5)
     gsearch.fit(train_X, np.array(train_Y))
+    gsearch.grid_scores_, gsearch.best_params_, gsearch.best_score_
     print ("Best score: %0.3f" % gsearch.best_score_)
     print ("Best paramters set:")
     best_paramters = gsearch.best_estimator_.get_params()
     for param_name in sorted(tune_params.keys()):
-        print("\t%s: %r" % (param_name, tune_params[param_name]))
+        print("\t%s: %r" % (param_name, best_paramters[param_name]))
 
 
 if __name__ == '__main__':
@@ -119,9 +116,7 @@ if __name__ == '__main__':
     #eval_df = df[(df['time'] >= "2015-07-01 00:00:00")]
     train_df = df[(df['time'] > "2015-06-25 00:00:00") & (df['time'] < "2015-07-01 00:00:00")]
     eval_df = df[(df['time'] >= "2015-07-29 00:00:00")]
-
     print "train and eval has splited!!!!"
-
     weekday_fea = args.addWeekday
     if weekday_fea:
         train_df['weekday'] = train_df['time'].apply(lambda x: get_weekday(x))
@@ -131,7 +126,6 @@ if __name__ == '__main__':
         train_dayhot.reset_index(drop=True, inplace=True)
         train_df = pd.concat([train_df, train_dayhot], axis=1)
         train_df.drop(['weekday'], axis=1, inplace=True)
-
         eval_df['weekday'] = eval_df['time'].apply(lambda x: get_weekday(x))
         eval_dayhot = onehot(list(eval_df['weekday']), 7)
         eval_dayhot = pd.DataFrame(eval_dayhot, columns=range(7))
@@ -140,7 +134,6 @@ if __name__ == '__main__':
         eval_df = pd.concat([eval_df, eval_dayhot], axis=1)
         eval_df.drop(['weekday'], axis=1, inplace=True)
         print "weekday onehoted!!!" 
-
     data_list = [] 
     def func(i):
         line = train_df.loc[i]
@@ -183,7 +176,6 @@ if __name__ == '__main__':
     print "Get Train NGram feature!!!!"
     train_Y = train_df[['fc', 'cc', 'lc']]
     train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
-
     tune_mode = args.tune_mode
     if not tune_mode:
         print "model established!!!!!"
@@ -225,7 +217,6 @@ if __name__ == '__main__':
                     eval_data_list.append(line)
                     line = erp.readline()
             erp.close()
-
         eval_nGram = vectorizer.transform(eval_data_list).toarray()
         eval_nGram = pd.DataFrame(eval_nGram, columns=range(NGram_fea_num))
         eval_nGram.reset_index(drop=True, inplace=True)
