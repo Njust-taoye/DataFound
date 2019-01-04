@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
     
     NGram_fea_num = args.NGram_num
-    vectorizer = CountVectorizer(min_df=1, max_features=NGram_fea_num, ngram_range=(1,2), analyzer = 'word',\ 
+    vectorizer = CountVectorizer(min_df=1, max_features=NGram_fea_num, ngram_range=(1,2), analyzer = 'word', 
                                 stop_words = get_stop_words(), preprocessor=_remove_noise)
     train_nGram = vectorizer.fit_transform(data_list).toarray()
     train_nGram = pd.DataFrame(train_nGram, columns=range(NGram_fea_num))
