@@ -90,7 +90,8 @@ def tune_model(train_X, train_Y):
     
     tune_params = {'n_estimators': [100, 500], 'max_features': ['sqrt', 'log2'], 'max_depth': [100, 200]}
     score = make_scorer(cal_score, greater_is_better=False)
-    gsearch = GridSearchCV(estimator = RandomForestRegressor(oob_score=False, random_state=10), param_grid = tune_params, scoring=score, cv=5)
+    gsearch = GridSearchCV(estimator = RandomForestRegressor(oob_score=False, random_state=10), param_grid = tune_params,\
+                                                            scoring=score, cv=5)
     gsearch.fit(train_X, np.array(train_Y))
     gsearch.grid_scores_, gsearch.best_params_, gsearch.best_score_
     print ("Best score: %0.3f" % gsearch.best_score_)
@@ -167,7 +168,8 @@ if __name__ == '__main__':
 
     
     NGram_fea_num = args.NGram_num
-    vectorizer = CountVectorizer(min_df=1, max_features=NGram_fea_num, ngram_range=(1,2), analyzer = 'word', stop_words = get_stop_words(), preprocessor=_remove_noise)
+    vectorizer = CountVectorizer(min_df=1, max_features=NGram_fea_num, ngram_range=(1,2), analyzer = 'word',\ 
+                                stop_words = get_stop_words(), preprocessor=_remove_noise)
     train_nGram = vectorizer.fit_transform(data_list).toarray()
     train_nGram = pd.DataFrame(train_nGram, columns=range(NGram_fea_num))
     train_nGram.reset_index(drop=True, inplace=True)
@@ -180,7 +182,8 @@ if __name__ == '__main__':
     if not tune_mode:
         print "model established!!!!!"
         #rf = RandomForestRegressor(oob_score=False, random_state=10)
-        rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, min_samples_split=4, min_samples_leaf=2)
+        rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, \
+                                    min_samples_split=4, min_samples_leaf=2)
         rf.fit(train_X, train_Y)
     if tune_mode:
         print "tune model start !!!!!"
