@@ -4,7 +4,8 @@
 ## Created Time: Thu 03 Jan 2019 11:14:29 PM CST
 
 python -u feature.py --addWeekday True \
-				  --NGram_num 1000
+					--tune_mode True\
+				  	--NGram_num 2000
 
 
 
