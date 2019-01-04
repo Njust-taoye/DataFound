@@ -5,7 +5,7 @@
 ## @Created Time: Thu 27 Dec 2018 01:33:40 PM CST
 ## @Description:
 import pdb
-import os
+import copy,os,sys,psutil
 import sys
 reload(sys)
 sys.setdefaultencoding('utf8')
@@ -22,6 +22,8 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import datetime
 import argparse
+from sklearn.model_selection import GridSearchCV
+from sklearn import metrics
 
 
 def _remove_noise(document):
@@ -70,6 +72,15 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Unsupported value encountered.')
+
+def establish_model(train_X, train_Y):
+    print ('获取内存占用率： '+(str)(psutil.virtual_memory().percent)+'%')
+    tune_params = [{'n_estimators': range(100, 500,100), 'max_features': ['auto', 'sqrt', 'log2'], 'max_depth': range(50, 500, 50), \
+            'min_samples_split': [2, 4, 6, 10, 20], 'min_samples_leaf': [1, 2, 3, 5, 10]}] 
+
+    gsearch = GridSearchCV(estimator = RandomForestClassifier(oob_score=False, random_state=10), 
+                       param_grid = tune_params, scoring='roc_auc', cv=5, scoring=)
+
 
 
 if __name__ == '__main__':
@@ -150,6 +161,7 @@ if __name__ == '__main__':
     print "Get Train NGram feature!!!!"
     train_Y = train_df[['fc', 'cc', 'lc']]
     train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
+
     print "model established!!!!!"
     #rf = RandomForestRegressor(oob_score=False, random_state=10)
     rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, min_samples_split=4, min_samples_leaf=2)
