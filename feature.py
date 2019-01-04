@@ -24,6 +24,7 @@ import datetime
 import argparse
 from sklearn.model_selection import GridSearchCV
 from sklearn import metrics
+from sklearn.metrics import make_scorer
 
 
 def _remove_noise(document):
@@ -46,22 +47,34 @@ def onehot(labels, label_class):
     one_hot_label = np.array([[int(i == int(labels[j])) for i in range(label_class)] for j in range(len(labels))]) 
     return one_hot_label
 
-def cal_score(real_Y, pred_Y):
-    real_fc = real_Y['fc']
-    real_cc = real_Y['cc']
-    real_lc = real_Y['lc']
 
-    pred_fc = pred_Y['fc']
-    pred_cc = pred_Y['cc']
-    pred_lc = pred_Y['lc']
-    dev_f = np.abs(pred_fc - real_fc)/(pred_fc + 5) 
-    dev_c = np.abs(pred_cc - real_cc)/(pred_cc + 3)
-    dev_l = np.abs(pred_lc - real_lc)/(pred_lc + 3)
+def cal_score(real_Y, pred_Y):
+    real_fc = real_Y[:, 0]
+    real_cc = real_Y[:, 1]
+    real_lc = real_Y[:, 2]
+
+    pred_fc = pred_Y[:, 0]
+    pred_cc = pred_Y[:, 1]
+    pred_lc = pred_Y[:, 2]
+    dev_f = np.abs(pred_fc - real_fc)/(real_fc + 5) 
+    dev_c = np.abs(pred_cc - real_cc)/(real_cc + 3)
+    dev_l = np.abs(pred_lc - real_lc)/(real_lc + 3)
     dev = 1 - 0.5*dev_f - 0.25*dev_c - 0.25*dev_l
-    dev = dev.apply(lambda x: 1 if (x-0.8) > 0 else 0)
+    def func(x):
+        if x - 0.8 > 0:
+            return 1
+        else:
+            return 0
+    dev = np.array([func(x) for x in dev])
 
     count = real_fc + real_cc + real_lc + 1
-    count = count.apply(lambda x: 100 if x > 100 else x)
+    def func2(x):
+        if x > 100:
+            return 100
+        else:
+            return x
+
+    count = np.array([func2(x) for x in count])
     res = sum(count * dev)/ float(sum(count))
     return res
 
@@ -73,23 +86,32 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Unsupported value encountered.')
 
-def establish_model(train_X, train_Y):
+def tune_model(train_X, train_Y):
     print ('获取内存占用率： '+(str)(psutil.virtual_memory().percent)+'%')
-    tune_params = [{'n_estimators': range(100, 500,100), 'max_features': ['auto', 'sqrt', 'log2'], 'max_depth': range(50, 500, 50), \
-            'min_samples_split': [2, 4, 6, 10, 20], 'min_samples_leaf': [1, 2, 3, 5, 10]}] 
+    #tune_params = [{'n_estimators': range(100, 500,100), 'max_features': ['auto', 'sqrt', 'log2'], 'max_depth': range(50, 500, 50), \
+    #        'min_samples_split': [2, 4, 6, 10, 20], 'min_samples_leaf': [1, 2, 3, 5, 10]}] 
+    
+    tune_params = [{'n_estimators': [100, 500], 'max_features': ['sqrt', 'log2'], 'max_depth': [100, 200]}]
+    score = make_scorer(cal_score, greater_is_better=False)
 
-    gsearch = GridSearchCV(estimator = RandomForestClassifier(oob_score=False, random_state=10), 
-                       param_grid = tune_params, scoring='roc_auc', cv=5, scoring=)
-
+    gsearch = GridSearchCV(estimator = RandomForestRegressor(oob_score=False, random_state=10), param_grid = tune_params, scoring=score, cv=5)
+    gsearch.fit(train_X, np.array(train_Y))
+    print ("Best score: %0.3f" % gsearch.best_score_)
+    print ("Best paramters set:")
+    best_paramters = gsearch.best_estimator_.get_params()
+    for param_name in sorted(tune_params.keys()):
+        print("\t%s: %r" % (param_name, tune_params[param_name]))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--addWeekday", help="add weekday feature if True", type=str2bool, nargs='?', const=True, default=True)
     parser.add_argument("--NGram_num", help="NGram feature num", type=int)
+    parser.add_argument("--tune_mode", help="tune_model if True", type=str2bool, nargs="?", const=True, default=False)
     args = parser.parse_args()
     print "是否增加weekday特征", args.addWeekday
     print "文本特征维度", args.NGram_num
+    print "是否在调参模式", args.tune_mode
     filename = 'weibo_train_data.txt'
     df = pd.read_csv(filename, sep='\t', header=None, names=['uid', 'mid', 'time', 'fc', 'cc', 'lc', 'content'])
     df.dropna(inplace=True)
@@ -162,52 +184,56 @@ if __name__ == '__main__':
     train_Y = train_df[['fc', 'cc', 'lc']]
     train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
 
-    print "model established!!!!!"
-    #rf = RandomForestRegressor(oob_score=False, random_state=10)
-    rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, min_samples_split=4, min_samples_leaf=2)
-    rf.fit(train_X, train_Y)
+    tune_mode = args.tune_mode
+    if not tune_mode:
+        print "model established!!!!!"
+        #rf = RandomForestRegressor(oob_score=False, random_state=10)
+        rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, min_samples_split=4, min_samples_leaf=2)
+        rf.fit(train_X, train_Y)
+    if tune_mode:
+        print "tune model start !!!!!"
+        tune_model(train_X, train_Y)
     print "model fited!!!!!"
-     
-    eval_data_list = [] 
-    def func(i):
-        line = eval_df.loc[i]
-        content = line['content'].replace("\n", " ")
-        word_cut = jieba.cut(content, cut_all=False)
-        word_list = list(word_cut)
-        return ' '.join(word_list)
-    if not os.path.exists('eval_words.txt'):
-        print "eval_words.txt not exists!!!!!"
-        rst = []
-        pool = Pool(8)
-        for i in range(len(eval_df)):
-            rst.append(pool.apply_async(func, args=(i,)))
-        pool.close()
-        pool.join()
-        rst = [i.get() for i in rst]
-        with open('eval_words.txt', 'w') as fp:
-            for i in rst:
-                eval_data_list.append(i)
-                fp.write(i+'\n')
-                #fp.write('\n')
-        fp.close()
-    else:
-        print "eval_words has exists !!!!!" 
-        with open('eval_words.txt', 'r') as erp:
-            line = erp.readline()
-            while line:
-                eval_data_list.append(line)
+    if not tune_mode: 
+        eval_data_list = [] 
+        def func(i):
+            line = eval_df.loc[i]
+            content = line['content'].replace("\n", " ")
+            word_cut = jieba.cut(content, cut_all=False)
+            word_list = list(word_cut)
+            return ' '.join(word_list)
+        if not os.path.exists('eval_words.txt'):
+            print "eval_words.txt not exists!!!!!"
+            rst = []
+            pool = Pool(8)
+            for i in range(len(eval_df)):
+                rst.append(pool.apply_async(func, args=(i,)))
+            pool.close()
+            pool.join()
+            rst = [i.get() for i in rst]
+            with open('eval_words.txt', 'w') as fp:
+                for i in rst:
+                    eval_data_list.append(i)
+                    fp.write(i+'\n')
+                    #fp.write('\n')
+            fp.close()
+        else:
+            print "eval_words has exists !!!!!" 
+            with open('eval_words.txt', 'r') as erp:
                 line = erp.readline()
-        erp.close()
+                while line:
+                    eval_data_list.append(line)
+                    line = erp.readline()
+            erp.close()
 
-    eval_nGram = vectorizer.transform(eval_data_list).toarray()
-    eval_nGram = pd.DataFrame(eval_nGram, columns=range(NGram_fea_num))
-    eval_nGram.reset_index(drop=True, inplace=True)
-    eval_df.reset_index(drop=True, inplace=True)
-    print "Get eval NGram feature!!!!!"
-    eval_df = pd.concat([eval_df, eval_nGram], axis=1) 
-    eval_Y = eval_df[['fc', 'cc', 'lc']]
-    eval_X = eval_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
-    pred_Y = rf.predict(eval_X)
-    pred_Y = pd.DataFrame(pred_Y, columns=['fc', 'cc', 'lc'])
-    print cal_score(eval_Y, pred_Y)
+        eval_nGram = vectorizer.transform(eval_data_list).toarray()
+        eval_nGram = pd.DataFrame(eval_nGram, columns=range(NGram_fea_num))
+        eval_nGram.reset_index(drop=True, inplace=True)
+        eval_df.reset_index(drop=True, inplace=True)
+        print "Get eval NGram feature!!!!!"
+        eval_df = pd.concat([eval_df, eval_nGram], axis=1) 
+        eval_Y = np.array(eval_df[['fc', 'cc', 'lc']])
+        eval_X = eval_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
+        pred_Y = rf.predict(eval_X)
+        print cal_score(eval_Y, pred_Y)
 
