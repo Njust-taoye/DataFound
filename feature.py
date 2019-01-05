@@ -15,7 +15,6 @@ import sklearn
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
-from tqdm import tqdm
 from multiprocessing import Pool,Manager
 import re
 import pandas as pd
@@ -30,6 +29,8 @@ from sklearn.metrics import make_scorer
 def _remove_noise(document):
     noise_pattern = re.compile("|".join(["http\S+", "\@\w+", "\#\w+"]))
     clean_text = re.sub(noise_pattern, "", document)
+    symbol_patt = re.compile('[\[+, \]+,【+, 】+,。+,{+, }+, !+,！+,?+,？+,<+,>+,《+,》+,（+,）+,\(+,\)+]')
+    clean_text = re.sub(symbol_patt, "", clean_text)
     return clean_text
 
 def get_stop_words():
@@ -136,17 +137,23 @@ if __name__ == '__main__':
         eval_df.drop(['weekday'], axis=1, inplace=True)
         print "weekday onehoted!!!" 
     data_list = [] 
+    train_words_num = []
     def func(i):
         line = train_df.loc[i]
         content = line['content'].replace("\n", " ")
+        words_num = len(content.decode('utf-8'))
         word_cut = jieba.cut(content, cut_all=False)
         word_list = list(word_cut)
-        return ' '.join(word_list)
+        word_list = ' '.join(word_list)
+        res = []
+        res.append(word_list)
+        res.append(str(words_num))
+        return '\t'.join(res)
     if not os.path.exists('cuted_word.txt'):
         print "cuted_word.txt not exists !!!"
         rst = []
         pool = Pool(8)
-        for i in tqdm(range(len(train_df))):
+        for i in range(len(train_df)):
             rst.append(pool.apply_async(func, args=(i,)))
         pool.close()
         pool.join()
@@ -155,48 +162,65 @@ if __name__ == '__main__':
         with open('cuted_word.txt', 'w') as fp:
             for i in rst:
                 fp.write(i+'\n')
-                data_list.append(i)
+                content, words_num = i.strip().split('\t')
+                data_list.append(content)
+                train_words_num.append(words_num)
         fp.close()
     else:
         print "cuted_word.txt has exists!!!!!"
         with open('cuted_word.txt', 'r') as rp:
             line = rp.readline()
             while line:
-                data_list.append(line)
+                content, words_num = line.strip().split('\t')
+                train_words_num.append(int(words_num))
+                data_list.append(content)
                 line = rp.readline()
         rp.close()
 
     
     NGram_fea_num = args.NGram_num
     vectorizer = CountVectorizer(min_df=1, max_features=NGram_fea_num, ngram_range=(1,2), analyzer = 'word', 
-                                stop_words = get_stop_words(), preprocessor=_remove_noise)
+                                stop_words = get_stop_words())
     train_nGram = vectorizer.fit_transform(data_list).toarray()
+    if not os.path.exists(str(NGram_fea_num)+"words.txt"):
+        with open(str(NGram_fea_num)+"words.txt", 'w') as fp:
+            for word in vectorizer.get_feature_names():
+                fp.write(word+"\n")
+    #pdb.set_trace()
+    train_words_num = pd.DataFrame(train_words_num, columns=['words_num'])
     train_nGram = pd.DataFrame(train_nGram, columns=range(NGram_fea_num))
+    train_words_num.reset_index(drop=True, inplace=True)
     train_nGram.reset_index(drop=True, inplace=True)
     train_df.reset_index(drop=True, inplace=True)
-    train_df = pd.concat([train_df, train_nGram], axis=1)
+    train_df = pd.concat([train_df, train_words_num, train_nGram], axis=1)
     print "Get Train NGram feature!!!!"
     train_Y = train_df[['fc', 'cc', 'lc']]
     train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
     tune_mode = args.tune_mode
     if not tune_mode:
         print "model established!!!!!"
-        #rf = RandomForestRegressor(oob_score=False, random_state=10)
-        rf = RandomForestRegressor(n_estimators=100, max_features='sqrt', max_depth=80, \
-                                    min_samples_split=4, min_samples_leaf=2)
+        rf = RandomForestRegressor(oob_score=False, random_state=10)
+        #rf = RandomForestRegressor(n_estimators=500, max_features='log', max_depth=100, \
+        #                            min_samples_split=4, min_samples_leaf=2)
         print rf.fit(train_X, train_Y)
     if tune_mode:
         print "tune model start !!!!!"
         tune_model(train_X, train_Y)
     print "model fited!!!!!"
     if not tune_mode: 
+        eval_words_num = [] 
         eval_data_list = [] 
         def func(i):
             line = eval_df.loc[i]
             content = line['content'].replace("\n", " ")
+            words_num = len(content.decode('utf-8'))
             word_cut = jieba.cut(content, cut_all=False)
             word_list = list(word_cut)
-            return ' '.join(word_list)
+            word_list = ' '.join(word_list)
+            res = [] 
+            res.append(word_list)
+            res.append(str(words_num))
+            return '\t'.join(res)
         if not os.path.exists('eval_words.txt'):
             print "eval_words.txt not exists!!!!!"
             rst = []
@@ -208,7 +232,9 @@ if __name__ == '__main__':
             rst = [i.get() for i in rst]
             with open('eval_words.txt', 'w') as fp:
                 for i in rst:
-                    eval_data_list.append(i)
+                    content, words_num = i.strip().split('\t')
+                    eval_data_list.append(content)
+                    eval_words_num.append(words_num)
                     fp.write(i+'\n')
                     #fp.write('\n')
             fp.close()
@@ -217,15 +243,19 @@ if __name__ == '__main__':
             with open('eval_words.txt', 'r') as erp:
                 line = erp.readline()
                 while line:
-                    eval_data_list.append(line)
+                    content, words_num = line.strip().split('\t')
+                    eval_data_list.append(content)
+                    eval_words_num.append(int(words_num))
                     line = erp.readline()
             erp.close()
         eval_nGram = vectorizer.transform(eval_data_list).toarray()
         eval_nGram = pd.DataFrame(eval_nGram, columns=range(NGram_fea_num))
+        eval_words_num = pd.DataFrame(eval_words_num, columns=['words_num'])
+        eval_words_num.reset_index(inplace=True, drop=True)
         eval_nGram.reset_index(drop=True, inplace=True)
         eval_df.reset_index(drop=True, inplace=True)
         print "Get eval NGram feature!!!!!"
-        eval_df = pd.concat([eval_df, eval_nGram], axis=1) 
+        eval_df = pd.concat([eval_df, eval_words_num, eval_nGram], axis=1) 
         eval_Y = np.array(eval_df[['fc', 'cc', 'lc']])
         eval_X = eval_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
         pred_Y = rf.predict(eval_X)
