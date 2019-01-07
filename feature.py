@@ -24,14 +24,22 @@ import argparse
 from sklearn.model_selection import GridSearchCV
 from sklearn import metrics
 from sklearn.metrics import make_scorer
+import zhon
+from zhon import hanzi
+from zhon.hanzi import punctuation
 
 
-def _remove_noise(document):
+def remove_noise(document):
     noise_pattern = re.compile("|".join(["http\S+", "\@\w+", "\#\w+"]))
-    clean_text = re.sub(noise_pattern, "", document)
-    symbol_patt = re.compile('[\[+, \]+,【+, 】+,。+,{+, }+, !+,！+,?+,？+,<+,>+,《+,》+,（+,）+,\(+,\)+]')
-    clean_text = re.sub(symbol_patt, "", clean_text)
-    return clean_text
+    document = re.sub(noise_pattern, "", document)
+    symbol_patt = re.compile(r'[’!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~]+')
+    document = re.sub(symbol_patt, "", document)
+    document = re.sub(ur"[%s]+" %punctuation, " ", document)
+    patt = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+    document = re.sub(patt, "", document)
+    eng_punctuation = '!,;\.:\(\)\{\}\[\]\+\=\-_\<\>\*&\^%$#@!~?"\''
+    document = re.sub(r'[{}]+'.format(eng_punctuation),' ',document)
+    return document
 
 def get_stop_words():
     stop_words = []
@@ -111,13 +119,13 @@ if __name__ == '__main__':
     print "是否增加weekday特征", args.addWeekday
     print "文本特征维度", args.NGram_num
     print "是否在调参模式", args.tune_mode
-    filename = 'weibo_train_data.txt'
-    df = pd.read_csv(filename, sep='\t', header=None, names=['uid', 'mid', 'time', 'fc', 'cc', 'lc', 'content'])
+    filename = './trian_data.csv'
+    df = pd.read_csv(filename, sep='\t', header=0)
     df.dropna(inplace=True)
     #train_df = df[(df['time'] > "2015-03-10 00:00:00") & (df['time'] < "2015-07-01 00:00:00")]
     #eval_df = df[(df['time'] >= "2015-07-01 00:00:00")]
     train_df = df[(df['time'] > "2015-06-25 00:00:00") & (df['time'] < "2015-07-01 00:00:00")]
-    eval_df = df[(df['time'] >= "2015-07-29 00:00:00")]
+    eval_df = df[(df['time'] >= "2015-07-01 00:00:00") & (df['time'] <= '2015-07-03 00:00:00')]
     print "train and eval has splited!!!!"
     weekday_fea = args.addWeekday
     if weekday_fea:
@@ -138,16 +146,19 @@ if __name__ == '__main__':
         print "weekday onehoted!!!" 
     data_list = [] 
     train_words_num = []
+    train_set_words_num = []
     def func(i):
         line = train_df.loc[i]
         content = line['content'].replace("\n", " ")
-        words_num = len(content.decode('utf-8'))
+        words_num = len(content.replace(" ","").decode('utf-8'))
+        set_words_num = len(set(content.replace(" ","").decode('utf-8')))
         word_cut = jieba.cut(content, cut_all=False)
         word_list = list(word_cut)
         word_list = ' '.join(word_list)
         res = []
         res.append(word_list)
         res.append(str(words_num))
+        res.append(str(set_words_num))
         return '\t'.join(res)
     if not os.path.exists('cuted_word.txt'):
         print "cuted_word.txt not exists !!!"
@@ -162,17 +173,19 @@ if __name__ == '__main__':
         with open('cuted_word.txt', 'w') as fp:
             for i in rst:
                 fp.write(i+'\n')
-                content, words_num = i.strip().split('\t')
+                content, words_num, set_words_num = i.strip().split('\t')
                 data_list.append(content)
-                train_words_num.append(words_num)
+                train_words_num.append(int(words_num))
+                train_set_words_num.append(int(set_words_num))
         fp.close()
     else:
         print "cuted_word.txt has exists!!!!!"
         with open('cuted_word.txt', 'r') as rp:
             line = rp.readline()
             while line:
-                content, words_num = line.strip().split('\t')
+                content, words_num, set_words_num = line.strip().split('\t')
                 train_words_num.append(int(words_num))
+                train_set_words_num.append(int(set_words_num))
                 data_list.append(content)
                 line = rp.readline()
         rp.close()
@@ -180,19 +193,21 @@ if __name__ == '__main__':
     
     NGram_fea_num = args.NGram_num
     vectorizer = CountVectorizer(min_df=1, max_features=NGram_fea_num, ngram_range=(1,2), analyzer = 'word', 
-                                stop_words = get_stop_words())
+                                stop_words = get_stop_words(), token_pattern='\D+')
     train_nGram = vectorizer.fit_transform(data_list).toarray()
     if not os.path.exists(str(NGram_fea_num)+"words.txt"):
         with open(str(NGram_fea_num)+"words.txt", 'w') as fp:
             for word in vectorizer.get_feature_names():
                 fp.write(word+"\n")
-    #pdb.set_trace()
+    pdb.set_trace()
     train_words_num = pd.DataFrame(train_words_num, columns=['words_num'])
+    train_set_words_num = pd.DataFrame(train_set_words_num, columns=['set_words_num'])
     train_nGram = pd.DataFrame(train_nGram, columns=range(NGram_fea_num))
     train_words_num.reset_index(drop=True, inplace=True)
     train_nGram.reset_index(drop=True, inplace=True)
     train_df.reset_index(drop=True, inplace=True)
-    train_df = pd.concat([train_df, train_words_num, train_nGram], axis=1)
+    train_set_words_num.reset_index(drop=True, inplace=True)
+    train_df = pd.concat([train_df, train_words_num, train_set_words_num, train_nGram], axis=1)
     print "Get Train NGram feature!!!!"
     train_Y = train_df[['fc', 'cc', 'lc']]
     train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
@@ -210,16 +225,19 @@ if __name__ == '__main__':
     if not tune_mode: 
         eval_words_num = [] 
         eval_data_list = [] 
+        eval_set_words_num = [] 
         def func(i):
             line = eval_df.loc[i]
             content = line['content'].replace("\n", " ")
-            words_num = len(content.decode('utf-8'))
+            words_num = len(content.replace(" ", "").decode('utf-8'))
+            set_words_num = len(set(content.replace(" ","").decode('utf-8')))
             word_cut = jieba.cut(content, cut_all=False)
             word_list = list(word_cut)
             word_list = ' '.join(word_list)
             res = [] 
             res.append(word_list)
             res.append(str(words_num))
+            res.append(str(set_words_num))
             return '\t'.join(res)
         if not os.path.exists('eval_words.txt'):
             print "eval_words.txt not exists!!!!!"
@@ -232,9 +250,10 @@ if __name__ == '__main__':
             rst = [i.get() for i in rst]
             with open('eval_words.txt', 'w') as fp:
                 for i in rst:
-                    content, words_num = i.strip().split('\t')
+                    content, words_num, set_words_num = i.strip().split('\t')
                     eval_data_list.append(content)
-                    eval_words_num.append(words_num)
+                    eval_words_num.append(int(words_num))
+                    eval_set_words_num.append(int(set_words_num))
                     fp.write(i+'\n')
                     #fp.write('\n')
             fp.close()
@@ -243,19 +262,22 @@ if __name__ == '__main__':
             with open('eval_words.txt', 'r') as erp:
                 line = erp.readline()
                 while line:
-                    content, words_num = line.strip().split('\t')
+                    content, words_num, set_words_num = line.strip().split('\t')
                     eval_data_list.append(content)
                     eval_words_num.append(int(words_num))
+                    eval_set_words_num.append(int(set_words_num))
                     line = erp.readline()
             erp.close()
         eval_nGram = vectorizer.transform(eval_data_list).toarray()
         eval_nGram = pd.DataFrame(eval_nGram, columns=range(NGram_fea_num))
         eval_words_num = pd.DataFrame(eval_words_num, columns=['words_num'])
+        eval_set_words_num = pd.DataFrame(eval_set_words_num, columns=['set_words_num'])
         eval_words_num.reset_index(inplace=True, drop=True)
         eval_nGram.reset_index(drop=True, inplace=True)
         eval_df.reset_index(drop=True, inplace=True)
+        eval_set_words_num.reset_index(drop=True, inplace=True)
         print "Get eval NGram feature!!!!!"
-        eval_df = pd.concat([eval_df, eval_words_num, eval_nGram], axis=1) 
+        eval_df = pd.concat([eval_df, eval_words_num, eval_set_words_num, eval_nGram], axis=1) 
         eval_Y = np.array(eval_df[['fc', 'cc', 'lc']])
         eval_X = eval_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
         pred_Y = rf.predict(eval_X)
