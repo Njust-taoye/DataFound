@@ -155,6 +155,7 @@ if __name__ == '__main__':
     print "文本特征维度", args.NGram_num
     print "是否在调参模式", args.tune_mode
     filename = './trian_data.csv'
+    usr_info = pd.read_csv('usr_info.csv', sep='\t', header=0)
     df = pd.read_csv(filename, sep='\t', header=0)
     df['fc'] = df['fc'].astype(float)
     df['cc'] = df['cc'].astype(float)
@@ -252,7 +253,23 @@ if __name__ == '__main__':
     #train_df['set_words_num'] = train_df['set_words_num'].apply(lambda x: feature_discretization(x))
     print "Get Train NGram feature!!!!"
     train_Y = train_df['fc'].ravel()
-    train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
+    train_df = pd.merge(train_df, usr_info, how='left', on='uid')
+    train_df.fillna(0,inplace=True)
+    usr_freq_cates = len(set(train_df['usr_freq']))
+    mean_words_cates = len(set(train_df['mean_words_num']))
+    mean_set_words_cates = len(set(train_df['mean_set_words_num']))
+    usr_freq = onehot(list(train_df['usr_freq']), len(set(train_df['usr_freq'])))
+    usr_freq = pd.DataFrame(usr_freq, columns=range(len(set(train_df['usr_freq']))))
+    mean_words_num_onehot = onehot(list(train_df['mean_words_num']), len(set(train_df['mean_words_num'])))
+    mean_words_num_onehot = pd.DataFrame(mean_words_num_onehot, columns=range(len(set(train_df['mean_words_num']))))
+    mean_set_words_num_onehot = onehot(list(train_df['mean_set_words_num']), len(set(train_df['mean_set_words_num'])))
+    mean_set_words_num_onehot = pd.DataFrame(mean_set_words_num_onehot, columns=range(len(set(train_df['mean_set_words_num']))))
+    train_X = train_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc', 'usr_freq', 'mean_words_num', 'mean_set_words_num'], axis=1)
+    train_X.reset_index(drop=True, inplace=True)
+    usr_freq.reset_index(drop=True, inplace=True)
+    mean_words_num_onehot.reset_index(drop=True, inplace=True)
+    mean_set_words_num_onehot.reset_index(drop=True, inplace=True)
+    train_X = pd.concat([train_X, usr_freq, mean_words_num_onehot, mean_set_words_num_onehot], axis=1)
     tune_mode = args.tune_mode
     if not tune_mode:
         print "model established!!!!!"
@@ -326,7 +343,20 @@ if __name__ == '__main__':
         eval_df = pd.concat([eval_df, eval_words_num, eval_set_words_num, eval_nGram], axis=1) 
         #eval_df['set_words_num'] = eval_df['set_words_num'].apply(lambda x: feature_discretization(x))
         eval_Y = np.array(eval_df[['fc']])
-        eval_X = eval_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc'], axis=1)
+        eval_df = pd.merge(eval_df, usr_info, how='left', on='uid')
+        eval_df.fillna(0,inplace=True)
+        usr_freq = onehot(list(eval_df['usr_freq']), usr_freq_cates)
+        usr_freq = pd.DataFrame(usr_freq, columns=range(usr_freq_cates))
+        mean_words_num_onehot = onehot(list(eval_df['mean_words_num']), mean_words_cates)
+        mean_words_num_onehot = pd.DataFrame(mean_words_num_onehot, columns=range(mean_words_cates))
+        mean_set_words_num_onehot = onehot(list(eval_df['mean_set_words_num']), mean_set_words_cates)
+        mean_set_words_num_onehot = pd.DataFrame(mean_set_words_num_onehot, columns=range(mean_set_words_cates))
+        eval_X = eval_df.drop(['uid', 'mid', 'time', 'content', 'fc', 'cc', 'lc', 'usr_freq', 'mean_words_num', 'mean_set_words_num'], axis=1)
+        eval_X.reset_index(drop=True, inplace=True)
+        usr_freq.reset_index(drop=True, inplace=True)
+        mean_words_num_onehot.reset_index(drop=True, inplace=True)
+        mean_set_words_num_onehot.reset_index(drop=True, inplace=True)
+        eval_X = pd.concat([eval_X, usr_freq, mean_words_num_onehot, mean_set_words_num_onehot], axis=1)
         pred_Y = rf.predict(eval_X)
         print cal_score(eval_Y, pred_Y)
 
